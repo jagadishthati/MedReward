@@ -1,12 +1,21 @@
+import 'dart:js_interop';
+import 'package:flutter/foundation.dart';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-
 import '../providers/app_providers.dart';
 import '../theme.dart';
 import '../services/ocr_service.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+// JS interop for web geolocation
+@JS('requestBrowserLocation')
+external JSPromise _requestBrowserLocationJS();
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -19,6 +28,212 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   File? _selectedImage;
   bool _isProcessing = false;
   String? _error;
+  String city = "Detecting...";
+  bool _locationError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _detectCity();
+  }
+
+  Future<String> _reverseGeocodeWithAPI(double lat, double lon) async {
+    try {
+      debugPrint('Attempting API geocoding for: $lat, $lon');
+
+      // Using Nominatim (OpenStreetMap) - free, no API key needed
+      final url = Uri.parse(
+          'https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lon&zoom=10&addressdetails=1');
+
+      debugPrint('API URL: $url');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent': 'MedReward-App/1.0',
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      debugPrint('API Response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        debugPrint('API Response data: $data');
+
+        if (data.containsKey('address')) {
+          final address = data['address'];
+
+          // Try to get city from various fields
+          String? cityName = address['city'] ??
+              address['town'] ??
+              address['village'] ??
+              address['municipality'] ??
+              address['state_district'] ??
+              address['county'] ??
+              address['state'];
+
+          debugPrint('API Geocoding result: $cityName');
+
+          if (cityName != null && cityName.isNotEmpty) {
+            return cityName;
+          }
+        }
+      } else {
+        debugPrint('API returned non-200 status: ${response.statusCode}');
+        debugPrint('Response body: ${response.body}');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('API Geocoding failed: $e');
+      debugPrint('Stack trace: $stackTrace');
+    }
+    return 'Your Location';
+  }
+
+  Future<void> _detectCity() async {
+    try {
+      // For web, request browser permission first
+      if (kIsWeb) {
+        try {
+          final completer = Completer<void>();
+          _requestBrowserLocationJS().toDart.then((_) {
+            completer.complete();
+          }).catchError((error) {
+            completer.completeError(error);
+          });
+
+          await completer.future;
+          debugPrint('Browser location permission granted');
+        } catch (e) {
+          debugPrint('Browser location error: $e');
+          if (mounted) {
+            setState(() => city = "Location Blocked");
+          }
+          return;
+        }
+      }
+
+      // Check location service status
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        debugPrint('Location services are disabled');
+        if (mounted) {
+          setState(() => city = "Location Service Off");
+        }
+        return;
+      }
+
+      // Check and request permission
+      LocationPermission permission = await Geolocator.checkPermission();
+      debugPrint('Current permission: $permission');
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        debugPrint('Permission after request: $permission');
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          setState(() => city = "Location Denied");
+        }
+        return;
+      }
+
+      // Get current position with timeout
+      debugPrint('Getting position...');
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException('Location request timed out');
+        },
+      );
+
+      debugPrint(
+          'Position obtained: ${position.latitude}, ${position.longitude}');
+
+      // Get place name from coordinates
+      String locationName = "Your Location";
+
+      // First try the geocoding package
+      try {
+        List<Placemark> placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        ).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            debugPrint('Geocoding package timeout');
+            return [];
+          },
+        );
+
+        debugPrint('Placemarks received: ${placemarks.length}');
+
+        if (placemarks.isNotEmpty) {
+          final place = placemarks[0];
+          // debugPrint(
+          //     'Place details - Locality: ${place.locality}, SubAdmin: ${place.subAdministrativeArea}, Admin: ${place.administrativeArea}');
+          debugPrint('========== PLACEMARK DETAILS ==========');
+          debugPrint('Full placemark: $place');
+          debugPrint('Name: ${place.name}');
+          debugPrint('Street: ${place.street}');
+          debugPrint('IsoCountryCode: ${place.isoCountryCode}');
+          debugPrint('Country: ${place.country}');
+          debugPrint('PostalCode: ${place.postalCode}');
+          debugPrint('AdministrativeArea: ${place.administrativeArea}');
+          debugPrint('SubAdministrativeArea: ${place.subAdministrativeArea}');
+          debugPrint('Locality: ${place.locality}');
+          debugPrint('SubLocality: ${place.subLocality}');
+          debugPrint('Thoroughfare: ${place.thoroughfare}');
+          debugPrint('SubThoroughfare: ${place.subThoroughfare}');
+          debugPrint('======================================');
+
+          // Try multiple fields to find a good city name
+          locationName = place.locality ??
+              place.subAdministrativeArea ??
+              place.administrativeArea ??
+              place.subLocality ??
+              "Your Location";
+        }
+      } catch (e) {
+        debugPrint('Geocoding package error: $e');
+      }
+
+      // If geocoding package failed, try web API as fallback
+      if (locationName == "Your Location" && kIsWeb) {
+        debugPrint('Trying API-based geocoding as fallback...');
+        locationName = await _reverseGeocodeWithAPI(
+          position.latitude,
+          position.longitude,
+        );
+      }
+
+      // Final fallback to coordinates
+      if (locationName == "Your Location") {
+        locationName =
+            "${position.latitude.toStringAsFixed(2)}, ${position.longitude.toStringAsFixed(2)}";
+      }
+
+      if (mounted) {
+        setState(() {
+          city = locationName;
+        });
+      }
+    } on TimeoutException catch (e) {
+      debugPrint('Timeout: $e');
+      if (mounted) {
+        setState(() => city = "Location Timeout");
+      }
+    } catch (e) {
+      debugPrint('Location error: $e');
+      if (mounted) {
+        setState(() => city = "Location Unavailable");
+      }
+    }
+  }
 
   Future<void> _showUploadSheet() async {
     showModalBottomSheet(
@@ -104,11 +319,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Update recognized text in provider
       ref.read(recognizedTextProvider.notifier).state = recognized;
 
-      // Parse meds from text (basic)
+      // Parse meds from text
       final parsed = OcrService.parseMedsFromText(recognized);
       ref.read(medicationsProvider.notifier).setFromParsed(parsed);
     } catch (e) {
-      // Likely permission denied or picker error
       setState(() {
         _error = 'Unable to access camera/gallery. Check permissions.';
       });
@@ -131,10 +345,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Row(
-          children: const [
-            Icon(Icons.location_on_outlined, size: 18),
-            SizedBox(width: 6),
-            Text('Mumbai', style: TextStyle(fontWeight: FontWeight.w600)),
+          children: [
+            const Icon(Icons.location_on_outlined, size: 18),
+            const SizedBox(width: 6),
+            Text(city, style: const TextStyle(fontWeight: FontWeight.w600)),
           ],
         ),
         actions: [
@@ -207,7 +421,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-// Small profile summary card like the design (name + conditions)
 class _ProfileSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -236,7 +449,6 @@ class _ProfileSummaryCard extends StatelessWidget {
   }
 }
 
-// Search field placeholder
 class _SearchField extends StatelessWidget {
   const _SearchField();
 
@@ -256,7 +468,6 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-// Upload prescription section with camera/gallery and loading state
 class _UploadCard extends StatelessWidget {
   final File? image;
   final bool isProcessing;
@@ -296,7 +507,7 @@ class _UploadCard extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onUpload,
                 icon: const Icon(Icons.upload_file),
-                label: const Text('Upload Prescription'),
+                label: const Text('Upload'),
               ),
             ],
           ),
@@ -372,7 +583,6 @@ class _RecognizedTextCard extends StatelessWidget {
   }
 }
 
-// Per-medication card styled like the design
 class _MedCard extends ConsumerWidget {
   final int index;
   const _MedCard({required this.index});
@@ -381,7 +591,7 @@ class _MedCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final meds = ref.watch(medicationsProvider);
     final m = meds[index];
-    final pct = m.taken ? 1.0 : 0.0; // placeholder adherence per med
+    final pct = m.taken ? 1.0 : 0.0;
 
     return Container(
       decoration: roundedCardDecoration(),
@@ -441,7 +651,6 @@ class _MedCard extends ConsumerWidget {
   }
 }
 
-// AI Interaction Checker card
 class _AiInteractionCheckerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -478,7 +687,6 @@ class _AiInteractionCheckerCard extends StatelessWidget {
   }
 }
 
-// Overall adherence progress bar (kept from earlier)
 class _AdherenceProgress extends StatelessWidget {
   final double progress;
   const _AdherenceProgress({required this.progress});
@@ -518,7 +726,6 @@ class _AdherenceProgress extends StatelessWidget {
   }
 }
 
-// Rewards gradient card
 class _RewardsGradientCard extends StatelessWidget {
   final int points;
   const _RewardsGradientCard({required this.points});

@@ -1,24 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="MedReward Prescription Scanner">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -29,10 +16,49 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>medreward</title>
+  <title>MedReward</title>
   <link rel="manifest" href="manifest.json">
+  
+  <!-- Web-specific settings -->
+  <meta name="flutter-web-renderer" content="html">
+  <meta name="application-name" content="MedReward">
+  <meta name="theme-color" content="#2DBE74">
+  <meta name="geolocation" content="true">
 </head>
 <body>
+  <!-- Geolocation helper script -->
+  <script>
+    // Request browser geolocation permission and get position
+    function requestBrowserLocation() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error("Geolocation not supported"));
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            console.log("Location obtained:", position.coords);
+            resolve(position);
+          },
+          (error) => {
+            console.error("Geolocation error:", error.code, error.message);
+            reject(error);
+          },
+          { 
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+          }
+        );
+      });
+    }
+
+    // Make it globally available
+    window.requestBrowserLocation = requestBrowserLocation;
+  </script>
+
+  <!-- Flutter bootstrap -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
