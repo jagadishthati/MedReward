@@ -12,6 +12,7 @@ import 'package:geocoding/geocoding.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:medreward/providers/user_provider.dart';
 
 // JS interop for web geolocation
 @JS('requestBrowserLocation')
@@ -421,32 +422,86 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _ProfileSummaryCard extends StatelessWidget {
+// class _ProfileSummaryCard extends StatelessWidget {
+// Add this to your _ProfileSummaryCard widget in home_screen.dart
+
+class _ProfileSummaryCard extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(userProvider);
+
     return Container(
       decoration: roundedCardDecoration(),
       padding: const EdgeInsets.all(12),
       child: Row(
-        children: const [
-          CircleAvatar(radius: 18, child: Icon(Icons.person)),
-          SizedBox(width: 12),
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: const Color(0xFF2DBE74),
+            child: Text(
+              user?.fullName.substring(0, 1).toUpperCase() ?? 'U',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Neeraj Kumar',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-                SizedBox(height: 2),
-                Text('♡ Type 2 Diabetes, Hypertension',
-                    style: TextStyle(fontSize: 12, color: Colors.black54)),
+                Text(
+                  user?.fullName ?? 'Loading...',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  user != null
+                      ? '${user.age} years old • ${user.gender}'
+                      : 'Fetching user info...',
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
               ],
             ),
+          ),
+          // Optional: Add edit profile button
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            onPressed: () {
+              // Navigate to profile edit screen
+            },
           ),
         ],
       ),
     );
   }
+}
+
+@override
+Widget build(BuildContext context) {
+  return Container(
+    decoration: roundedCardDecoration(),
+    padding: const EdgeInsets.all(12),
+    child: Row(
+      children: const [
+        CircleAvatar(radius: 18, child: Icon(Icons.person)),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Neeraj Kumar',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              SizedBox(height: 2),
+              Text('♡ Type 2 Diabetes, Hypertension',
+                  style: TextStyle(fontSize: 12, color: Colors.black54)),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SearchField extends StatelessWidget {

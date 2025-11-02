@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/medication.dart';
+export 'user_provider.dart';
 
 // Rewards points provider
 final rewardsPointsProvider = StateProvider<int>((ref) => 120);
@@ -20,6 +21,23 @@ final medicationsProvider =
     StateNotifierProvider<MedicationsController, List<Medication>>(
   (ref) => MedicationsController()..loadFromStorage(),
 );
+
+// Auth provider
+final authProvider = StateNotifierProvider<AuthNotifier, bool>((ref) {
+  return AuthNotifier();
+});
+
+class AuthNotifier extends StateNotifier<bool> {
+  AuthNotifier() : super(false);
+
+  void login() {
+    state = true;
+  }
+
+  void logout() {
+    state = false;
+  }
+}
 
 class MedicationsController extends StateNotifier<List<Medication>> {
   MedicationsController() : super(const []);
