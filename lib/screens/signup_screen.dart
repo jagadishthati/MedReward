@@ -501,6 +501,49 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                           _isLoading = false;
                         });
 
+                        // if (signedUp) {
+                        //   // Store user data after successful signup
+                        //   final AuthService authService = AuthService();
+
+                        //   // Get the user data to store
+                        //   Map<String, dynamic>? userData;
+
+                        //   if (!_isPhoneSignup) {
+                        //     // For email signup, we need to fetch the user
+                        //     userData = await authService.login(
+                        //       _emailController.text,
+                        //       _passwordController.text,
+                        //     );
+                        //   } else {
+                        //     // For phone signup, you might want to fetch by phone
+                        //     // For now, we'll construct basic data
+                        //     userData = {
+                        //       'full_name': _nameController.text,
+                        //       'date_of_birth':
+                        //           _convertDateFormat(_dobController.text),
+                        //       'gender': _selectedGender,
+                        //       'phone_number': _phoneNumberController.text,
+                        //       'auth_method': 'phone',
+                        //     };
+                        //   }
+
+                        //   if (userData != null) {
+                        //     // Store user in provider
+                        //     ref.read(userProvider.notifier).setUser(userData);
+                        //   }
+
+                        //   ref.read(authProvider.notifier).login();
+                        //   ScaffoldMessenger.of(context).showSnackBar(
+                        //     const SnackBar(
+                        //         content: Text('Account created successfully!')),
+                        //   );
+                        // } else {
+                        //   ScaffoldMessenger.of(context).showSnackBar(
+                        //     const SnackBar(content: Text('Signup failed')),
+                        //   );
+                        // }
+                        // Replace the signup success block (around line 442-469) with this:
+
                         if (signedUp) {
                           // Store user data after successful signup
                           final AuthService authService = AuthService();
@@ -519,8 +562,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             // For now, we'll construct basic data
                             userData = {
                               'full_name': _nameController.text,
-                              'date_of_birth':
-                                  _convertDateFormat(_dobController.text),
+                              'date_of_birth': _dobController.text,
                               'gender': _selectedGender,
                               'phone_number': _phoneNumberController.text,
                               'auth_method': 'phone',
@@ -533,14 +575,31 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                           }
 
                           ref.read(authProvider.notifier).login();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Account created successfully!')),
-                          );
+
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content:
+                                      Text('Account created successfully!')),
+                            );
+
+                            // Navigate to home screen or login screen
+                            // Option 1: Navigate to home (if you want to log them in automatically)
+                            Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                  builder: (context) => const HomeScreen()),
+                              (route) => false,
+                            );
+
+                            // Option 2: Navigate back to login (if you want them to login again)
+                            // Navigator.of(context).pop();
+                          }
                         } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Signup failed')),
-                          );
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Signup failed')),
+                            );
+                          }
                         }
                       },
                 child: _isLoading

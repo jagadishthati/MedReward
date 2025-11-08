@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:medreward/providers/app_providers.dart';
 import 'package:medreward/navigation/main_shell.dart';
-import 'package:medreward/screens/signup_screen.dart';
+import 'package:medreward/screens/login_screen.dart'; // Add this import
 import 'theme.dart';
 
 void main() {
@@ -20,7 +20,7 @@ class MedRewardApp extends ConsumerWidget {
       title: 'MedReward',
       theme: buildMedTheme(),
       debugShowCheckedModeBanner: false,
-      home: isLoggedIn ? MainShell() : SignupScreen(),
+      home: isLoggedIn ? const MainShell() : const LoginScreen(), // Fixed here
     );
   }
 }

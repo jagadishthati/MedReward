@@ -504,21 +504,114 @@ Widget build(BuildContext context) {
   );
 }
 
-class _SearchField extends StatelessWidget {
+// class _SearchField extends StatelessWidget {
+//   const _SearchField();
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return Container(
+//       decoration: roundedCardDecoration(),
+//       child: const TextField(
+//         decoration: InputDecoration(
+//           prefixIcon: Icon(Icons.search),
+//           hintText: 'Search for medicines',
+//           border: InputBorder.none,
+//           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+//         ),
+//       ),
+//     );
+//   }
+// }
+class _SearchField extends StatefulWidget {
   const _SearchField();
 
   @override
+  State<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends State<_SearchField> {
+  final TextEditingController _controller = TextEditingController();
+  List<String> _suggestions = [];
+  Timer? _debounce;
+
+  Future<void> _fetchSuggestions(String query) async {
+    if (query.isEmpty) {
+      setState(() => _suggestions = []);
+      return;
+    }
+
+    final url = Uri.parse(
+        'http://localhost:3000/brand-names?query=${Uri.encodeComponent(query)}');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data['success'] == true) {
+        setState(() {
+          _suggestions =
+              List<String>.from(data['brands'].map((b) => b['brand_name']));
+        });
+      }
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      if (_debounce?.isActive ?? false) _debounce!.cancel();
+      _debounce = Timer(const Duration(milliseconds: 400), () {
+        _fetchSuggestions(_controller.text.trim());
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: roundedCardDecoration(),
-      child: const TextField(
-        decoration: InputDecoration(
-          prefixIcon: Icon(Icons.search),
-          hintText: 'Search for medicines',
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+    return Column(
+      children: [
+        Container(
+          decoration: roundedCardDecoration(),
+          child: TextField(
+            controller: _controller,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search),
+              hintText: 'Search for medicines',
+              border: InputBorder.none,
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            ),
+          ),
         ),
-      ),
+        if (_suggestions.isNotEmpty)
+          Container(
+            decoration: roundedCardDecoration(),
+            margin: const EdgeInsets.only(top: 4),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _suggestions.length,
+              itemBuilder: (context, index) {
+                final name = _suggestions[index];
+                return ListTile(
+                  title: Text(name),
+                  onTap: () {
+                    // Use the selected brand name for further actions
+                    _controller.text = name;
+                    setState(() => _suggestions.clear());
+                    FocusScope.of(context).unfocus();
+                  },
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 }
